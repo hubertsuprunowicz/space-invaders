@@ -55,14 +55,14 @@ class Player extends PIXI.Sprite {
 }
 
 class Beam extends PIXI.Graphics {
-  dy = 4;
+  dy = 5;
 
   constructor(x, y) {
     super();
     this.rect(0, 0, 6, 20);
     this.fill(0x0000ff);
     this.x = x - this.width / 2;
-    this.y = y;
+    this.y = y - this.height / 2;
 
     app.stage.addChild(this);
   }
