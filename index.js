@@ -2,16 +2,21 @@
 
 const LEFT = -1;
 const RIGHT = 1;
-const PLAYER_POSITION_OFFSET = 15;
 
-let enemyDirection = RIGHT;
-let enemySpeed = 2;
+const app = new PIXI.Application();
 
 class Player extends PIXI.Sprite {
   dx = 0;
+  offset = 15;
+  beams = [];
+
   constructor(texture) {
     super(texture);
+    this.x = app.renderer.width / 2;
+    this.y = app.renderer.height - this.height - this.offset;
     this.attachKeyboardListeners();
+
+    app.stage.addChild(this);
   }
 
   attachKeyboardListeners = () => {
@@ -23,7 +28,10 @@ class Player extends PIXI.Sprite {
         this.dx = -3;
       }
       if (event.key === " ") {
-        console.log("space");
+        const beamX = this.x + this.width / 2;
+        const beamY = this.y;
+        const beam = new Beam(beamX, beamY);
+        this.beams.push(beam);
       }
     });
 
@@ -31,44 +39,83 @@ class Player extends PIXI.Sprite {
       this.dx = 0;
     });
   };
+
+  stageIntersect = () => {
+    if (this.x + this.width > app.renderer.width) {
+      this.x = app.renderer.width - this.width;
+    }
+
+    if (this.x < 0) {
+      this.x = 0;
+    }
+
+    this.x += this.dx;
+
+    this.beams.forEach((beam) => {
+      beam.stageIntersect();
+    });
+  };
+}
+
+class Beam extends PIXI.Graphics {
+  dy = 4;
+
+  constructor(x, y) {
+    super();
+    this.rect(0, 0, 6, 20);
+    this.fill(0x0000ff);
+    this.x = x - this.width / 2;
+    this.y = y;
+
+    app.stage.addChild(this);
+  }
+
+  stageIntersect = () => {
+    if (this.y < 0) {
+      app.stage.removeChild(this);
+    }
+
+    this.y -= this.dy;
+  };
+}
+
+class Enemy extends PIXI.Sprite {
+  dx = 2;
+  direction = LEFT;
+
+  constructor(texture) {
+    super(texture);
+    this.x = app.renderer.width / 2;
+    this.y = app.renderer.height / 2;
+
+    app.stage.addChild(this);
+  }
+
+  stageIntersect = () => {
+    if (this.x + this.width > app.renderer.width) {
+      this.direction = LEFT;
+    }
+
+    if (this.x < 0) {
+      this.direction = RIGHT;
+    }
+
+    this.x += this.dx * this.direction;
+  };
 }
 
 (async () => {
-  const app = new PIXI.Application();
   await app.init();
   document.body.appendChild(app.canvas);
 
   const playerTexture = await PIXI.Assets.load("./assets/player.png");
   const player = new Player(playerTexture);
-  player.dx = 0;
-  player.x = app.renderer.width / 2;
-  player.y = app.renderer.height - player.height - PLAYER_POSITION_OFFSET;
-  app.stage.addChild(player);
 
   const enemyTexture = await PIXI.Assets.load("./assets/enemy.png");
-  const enemy = new PIXI.Sprite(enemyTexture);
-  enemy.x = app.renderer.width / 2;
-  enemy.y = app.renderer.height / 2;
-  app.stage.addChild(enemy);
+  const enemy = new Enemy(enemyTexture);
 
   app.ticker.add(() => {
-    if (enemy.x + enemy.width > app.renderer.width) {
-      enemyDirection = LEFT;
-    }
-
-    if (enemy.x < 0) {
-      enemyDirection = RIGHT;
-    }
-
-    enemy.x += enemySpeed * enemyDirection;
-
-    if (player.x + player.width > app.renderer.width) {
-      player.x = app.renderer.width - player.width;
-    }
-
-    if (player.x < 0) {
-      player.x = 0;
-    }
-    player.x += player.dx;
+    enemy.stageIntersect();
+    player.stageIntersect();
   });
 })();
