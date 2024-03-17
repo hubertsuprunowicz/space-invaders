@@ -8,7 +8,7 @@ const app = new PIXI.Application();
 class Player extends PIXI.Sprite {
   dx = 0;
   offset = 15;
-  beams = [];
+  beam = undefined;
 
   constructor(texture) {
     super(texture);
@@ -28,10 +28,11 @@ class Player extends PIXI.Sprite {
         this.dx = -3;
       }
       if (event.key === " ") {
+        if (this.beam) return;
+
         const beamX = this.x + this.width / 2;
         const beamY = this.y;
-        const beam = new Beam(beamX, beamY);
-        this.beams.push(beam);
+        this.beam = new Beam(beamX, beamY);
       }
     });
 
@@ -50,10 +51,6 @@ class Player extends PIXI.Sprite {
     }
 
     this.x += this.dx;
-
-    this.beams.forEach((beam) => {
-      beam.stageIntersect();
-    });
   };
 }
 
@@ -70,12 +67,12 @@ class Beam extends PIXI.Graphics {
     app.stage.addChild(this);
   }
 
-  stageIntersect = () => {
-    if (this.y < 0) {
-      app.stage.removeChild(this);
-    }
+  intersectWith = (obj) => {
+    const xOverlap = this.x < obj.x + obj.width && this.x + this.width > obj.x;
+    const yOverlap =
+      this.y < obj.y + obj.height && this.y + this.height > obj.y;
 
-    this.y -= this.dy;
+    return xOverlap && yOverlap;
   };
 }
 
@@ -115,7 +112,24 @@ class Enemy extends PIXI.Sprite {
   const enemy = new Enemy(enemyTexture);
 
   app.ticker.add(() => {
-    enemy.stageIntersect();
-    player.stageIntersect();
+    enemy?.stageIntersect();
+    player?.stageIntersect();
+
+    if (player.beam) {
+      if (player.beam.y < 0) {
+        app.stage.removeChild(player.beam);
+        player.beam = null;
+        return;
+      }
+
+      if (player.beam.intersectWith(enemy)) {
+        app.stage.removeChild(enemy);
+        app.stage.removeChild(player.beam);
+        player.beam = null;
+        return;
+      }
+
+      player.beam.y -= player.beam.dy;
+    }
   });
 })();
