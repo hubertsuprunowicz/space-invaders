@@ -1,9 +1,15 @@
 // import * as PIXI from "./pixi";
+// npx http-server --proxy http://localhost:8080?
 
 const LEFT = -1;
 const RIGHT = 1;
+const ENEMIES_QUANTITY_PER_ROW = 3;
+const ENEMIES_ROWS = 1;
 
 const app = new PIXI.Application();
+const playerTexture = await PIXI.Assets.load("./assets/player.png");
+const enemyTexture = await PIXI.Assets.load("./assets/enemy.png");
+let score = 0;
 
 class Player extends PIXI.Sprite {
   dx = 0;
@@ -68,9 +74,8 @@ class Beam extends PIXI.Graphics {
   }
 
   intersectWith = (obj) => {
-    const xOverlap = this.x < obj.x + obj.width && this.x + this.width > obj.x;
-    const yOverlap =
-      this.y < obj.y + obj.height && this.y + this.height > obj.y;
+    const xOverlap = this.x < obj.maxX && this.x + this.width > obj.minX;
+    const yOverlap = this.y < obj.maxY && this.y + this.height > obj.minY;
 
     return xOverlap && yOverlap;
   };
@@ -80,24 +85,56 @@ class Enemy extends PIXI.Sprite {
   dx = 2;
   direction = LEFT;
 
-  constructor(texture) {
+  constructor(texture, i, j) {
     super(texture);
-    this.x = app.renderer.width / 2;
-    this.y = app.renderer.height / 2;
+    const gap = 20;
+    const yOffset = 20;
+    this.x = (this.width + gap) * j;
+    this.y = (this.height + gap) * i + yOffset;
+  }
+}
+
+class EnemyContainer extends PIXI.Container {
+  dx = 2;
+  direction = LEFT;
+
+  constructor() {
+    super();
+    this.enemies = Array.from({ length: ENEMIES_ROWS }).map((_, i) =>
+      Array.from({ length: ENEMIES_QUANTITY_PER_ROW }).map(
+        (_, j) => new Enemy(enemyTexture, i, j)
+      )
+    );
+
+    this.enemies.forEach((row) =>
+      row.forEach((enemy) => {
+        this.addChild(enemy);
+      })
+    );
 
     app.stage.addChild(this);
   }
 
+  resize = () => {
+    if (this.children.at(-1)) this.children.at(-1).uid = Math.random();
+  };
+
   stageIntersect = () => {
-    if (this.x + this.width > app.renderer.width) {
+    const { maxX, minX } = this.getBounds();
+    if (maxX > app.renderer.width || minX > app.renderer.width) {
       this.direction = LEFT;
+      this.moveDown();
     }
 
-    if (this.x < 0) {
+    if (maxX < 0 || minX < 0) {
       this.direction = RIGHT;
     }
 
     this.x += this.dx * this.direction;
+  };
+
+  moveDown = () => {
+    this.y += 40;
   };
 }
 
@@ -105,15 +142,33 @@ class Enemy extends PIXI.Sprite {
   await app.init();
   document.body.appendChild(app.canvas);
 
-  const playerTexture = await PIXI.Assets.load("./assets/player.png");
   const player = new Player(playerTexture);
+  const enemiesContainer = new EnemyContainer();
 
-  const enemyTexture = await PIXI.Assets.load("./assets/enemy.png");
-  const enemy = new Enemy(enemyTexture);
+  const textScore = new PIXI.Text({
+    text: "Score: " + score,
+    style: {
+      fill: "0xff1010",
+      fontFamily: "Arial",
+      fontSize: 24,
+      align: "center",
+    },
+  });
+  textScore.x = app.renderer.width / 2 - textScore.width / 2;
+  textScore.alpha = 0.5;
+
+  app.stage.addChild(textScore);
 
   app.ticker.add(() => {
-    enemy?.stageIntersect();
-    player?.stageIntersect();
+    player.stageIntersect();
+    enemiesContainer.stageIntersect();
+
+    score =
+      (ENEMIES_QUANTITY_PER_ROW * ENEMIES_ROWS -
+        enemiesContainer.children.length) *
+      10;
+
+    textScore.text = "Score: " + score;
 
     if (player.beam) {
       if (player.beam.y < 0) {
@@ -122,14 +177,19 @@ class Enemy extends PIXI.Sprite {
         return;
       }
 
-      if (player.beam.intersectWith(enemy)) {
-        app.stage.removeChild(enemy);
-        app.stage.removeChild(player.beam);
-        player.beam = null;
-        return;
-      }
+      enemiesContainer.enemies.forEach((row) =>
+        row.forEach((enemy) => {
+          if (player.beam && player.beam.intersectWith(enemy.getBounds())) {
+            enemiesContainer.removeChild(enemy);
+            app.stage.removeChild(player.beam);
+            player.beam = null;
+            enemiesContainer.resize();
+            return;
+          }
+        })
+      );
 
-      player.beam.y -= player.beam.dy;
+      if (player.beam) player.beam.y -= player.beam.dy;
     }
   });
 })();
